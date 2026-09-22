@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalkulator Geometri 3D Interaktif</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #canvas-container canvas { border-radius: 1rem; width: 100% !important; height: 100% !important; }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col md:flex-row p-4 md:p-6 gap-6">
+
+    <div class="w-full md:w-1/3 flex flex-col gap-6 bg-slate-800 p-6 rounded-2xl shadow-xl border border-slate-700">
+        <div>
+            <h1 class="text-2xl font-bold text-cyan-400 mb-1">Geometri 3D Interaktif</h1>
+            <p class="text-xs text-slate-400">Pilih bangun, masukkan ukuran, dan lihat hasil instan.</p>
+        </div>
+
+        <div>
+            <label class="block text-sm font-semibold text-slate-300 mb-2">Pilih Bentuk Bangun:</label>
+            <select id="shapeSelect" class="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-slate-100 focus:outline-none focus:border-cyan-400 transition-colors">
+                <option value="persegi">Persegi (Menjadi Kubus)</option>
+                <option value="persegi_panjang">Persegi Panjang (Menjadi Balok)</option>
+                <option value="lingkaran">Lingkaran (Menjadi Tabung)</option>
+            </select>
+        </div>
+
+        <div id="inputForm" class="flex flex-col gap-4 bg-slate-900 p-4 rounded-xl border border-slate-700/50"></div>
+
+        <div class="bg-gradient-to-br from-cyan-900/40 to-slate-900 p-4 rounded-xl border border-cyan-800/30 mt-auto">
+            <h3 class="text-sm font-bold text-cyan-400 uppercase tracking-wider mb-3">Hasil Analisis</h3>
+            <div class="grid grid-cols-2 gap-4 text-center">
+                <div class="bg-slate-800/80 p-3 rounded-lg border border-slate-700">
+                    <span class="block text-xs text-slate-400 mb-1">Luas Alas</span>
+                    <span id="resLuas" class="text-lg font-bold text-white">-</span>
+                </div>
+                <div class="bg-slate-800/80 p-3 rounded-lg border border-slate-700">
+                    <span class="block text-xs text-slate-400 mb-1">Keliling Alas</span>
+                    <span id="resKeliling" class="text-lg font-bold text-white">-</span>
+                </div>
+            </div>
+            <div class="mt-4 pt-3 border-t border-slate-700/50 text-center">
+                <span class="text-xs text-slate-400">Volume Bentuk 3D: </span>
+                <span id="resVolume" class="text-sm font-bold text-cyan-300">-</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex-1 bg-slate-950 rounded-2xl border border-slate-800 shadow-inner relative min-h-[400px] md:min-h-0 flex items-center justify-center" id="canvas-container">
+        <div class="absolute bottom-4 left-4 z-10 bg-slate-900/80 backdrop-blur-sm px-3 py-1.5 rounded-lg border border-slate-700 text-[10px] text-slate-400 pointer-events-none">
+            🖱️ Klik & geser untuk putar | 📜 Scroll untuk zoom
+        </div>
+    </div>
+
+    <script>
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x020617);
+
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera.position.set(7, 7, 10);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+        const dirLight = new THREE.DirectionalLight(0x22d3ee, 1.2);
+        dirLight.position.set(5, 10, 7);
+        scene.add(dirLight);
+
+        const gridHelper = new THREE.GridHelper(20, 20, 0x334155, 0x1e293b);
+        gridHelper.position.y = -2;
+        scene.add(gridHelper);
+
+        let currentMesh = null;
+        const shapeSelect = document.getElementById('shapeSelect');
+        const inputForm = document.getElementById('inputForm');
+
+        const inputTemplates = {
+            persegi: `<div><label class="block text-xs font-medium text-slate-400 mb-1">Panjang Sisi (cm)</label><input type="number" id="sisi" value="3" min="1" step="0.5" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-cyan-400"></div>`,
+            persegi_panjang: `<div><label class="block text-xs font-medium text-slate-400 mb-1">Panjang (cm)</label><input type="number" id="panjang" value="4" min="1" step="0.5" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm mb-3"><label class="block text-xs font-medium text-slate-400 mb-1">Lebar (cm)</label><input type="number" id="lebar" value="2" min="1" step="0.5" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm mb-3"><label class="block text-xs font-medium text-slate-400 mb-1">Tinggi (cm)</label><input type="number" id="tinggi_pp" value="2.5" min="1" step="0.5" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"></div>`,
+            lingkaran: `<div><label class="block text-xs font-medium text-slate-400 mb-1">Jari-jari (cm)</label><input type="number" id="radius" value="2" min="0.5" step="0.5" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm mb-3"><label class="block text-xs font-medium text-slate-400 mb-1">Tinggi (cm)</label><input type="number" id="tinggi_tabung" value="4" min="1" step="0.5" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm"></div>`
+        };
+
+        function renderFormAndUpdate() {
+            inputForm.innerHTML = inputTemplates[shapeSelect.value];
+            inputForm.querySelectorAll('input').forEach(i => i.addEventListener('input', updateSceneAndMath));
+            updateSceneAndMath();
+        }
+
+        function updateSceneAndMath() {
+            if (currentMesh) scene.remove(currentMesh);
+            let luas = 0, keliling = 0, volume = 0, geom;
+            const mat = new THREE.MeshPhysicalMaterial({ color: 0x06b6d4, roughness: 0.1, transmission: 0.5, thickness: 1.2, side: THREE.DoubleSide });
+
+            if (shapeSelect.value === 'persegi') {
+                const s = parseFloat(document.getElementById('sisi').value) || 1;
+                luas = s * s; keliling = 4 * s; volume = s ** 3;
+                geom = new THREE.BoxGeometry(s, s, s);
+            } else if (shapeSelect.value === 'persegi_panjang') {
+                const p = parseFloat(document.getElementById('panjang').value) || 1;
+                const l = parseFloat(document.getElementById('lebar').value) || 1;
+                const t = parseFloat(document.getElementById('tinggi_pp').value) || 1;
+                luas = p * l; keliling = 2 * (p + l); volume = p * l * t;
+                geom = new THREE.BoxGeometry(p, t, l);
+            } else if (shapeSelect.value === 'lingkaran') {
+                const r = parseFloat(document.getElementById('radius').value) || 1;
+                const t = parseFloat(document.getElementById('tinggi_tabung').value) || 1;
+                luas = Math.PI * r * r; keliling = 2 * Math.PI * r; volume = luas * t;
+                geom = new THREE.CylinderGeometry(r, r, t, 32);
+            }
+
+            currentMesh = new THREE.Mesh(geom, mat);
+            const wire = new THREE.LineSegments(new THREE.EdgesGeometry(geom), new THREE.LineBasicMaterial({ color: 0xffffff, opacity: 0.3, transparent: true }));
+            currentMesh.add(wire);
+            scene.add(currentMesh);
+
+            document.getElementById('resLuas').innerText = luas.toFixed(2) + " cm²";
+            document.getElementById('resKeliling').innerText = keliling.toFixed(2) + " cm";
+            document.getElementById('resVolume').innerText = volume.toFixed(2) + " cm³";
+        }
+
+        window.addEventListener('resize', () => {
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+        });
+
+        shapeSelect.addEventListener('change', renderFormAndUpdate);
+        renderFormAndUpdate();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+
+        (function animate() {
+            requestAnimationFrame(animate);
+            if (currentMesh) currentMesh.rotation.y += 0.003;
+            controls.update();
+            renderer.render(scene, camera);
+        })();
+    </script>
+</body>
+</html>
